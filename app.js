@@ -1,10 +1,10 @@
 var restify = require('restify');
 var fs = require('fs');
+var nodemailer = require('nodemailer');
 //var sendmail = require('sendmail');
-var helper = require('sendgrid').mail;
+//var helper = require('sendgrid').mail;
 var PATH = '/static/schedule-corticella';
-var MPATH = '/static/messages';
-var ROOT = '/.*';
+var MPATH = '/messages';
 //var obj = $.parseJSON( '{ "name": "John" }' );
  var shifts = [
 
@@ -131,7 +131,7 @@ function getShifts(req, res, next) {
 	res.setHeader('Access-Control-Allow-Origin','*');
 	res.send(200, shifts);
 	next();
-}
+};
 function getMessage(req, res, next) {
 	res.setHeader('Access-Control-Allow-Origin','*');
 	console.log("GET[" + MPATH + "] " + JSON.stringify(msg));
@@ -139,57 +139,72 @@ function getMessage(req, res, next) {
 	next();
 };
 
-// function getshift() {
-// 		$.ajax({
-// 		    url: "turni.json",
-// 		    type: "GET",
-// 		    success: function(result) {
-// 				return JSON.stringify(result);
-// 		    }
-// 		});
-// 	};
+
 
 function addMessage(req, res, next) {
-	res.setHeader('Access-Control-Allow-Origin','*');
+	res.setHeader('Access-Control-Allow-Origin','http://207.154.202.235');
 	console.log("POST[" + MPATH + "] " + JSON.stringify(req.body));
 
 	currentIdCount = currentIdCount + 1;
 	var msgId = currentIdCount * 1000;
 	req.body.id = msgId.toString();
-	// sendmail({
-	// 	    from: JSON.stringify(req.body.emailAddress),
-	// 	    to: 'claudio.tubertini@gmail.com',
-	// 	    subject: JSON.stringify(req.body.subject) +' from ' + JSON.stringify(req.body.emailAddress),
-	// 	    html: JSON.stringify(req.body.message),
-	// 		  },
-	// 		  function(err, reply) {
-	// 			    console.log(err && err.stack);
-	// 			    console.dir(reply);
-	// 		});
-            from_email = new helper.Email("claudio.tubertini@gmail.com");
-            to_email = new helper.Email("claudio.tubertini@archetipolibri.it");
-            subject = JSON.stringify(req.body.subject) +' from ' + JSON.stringify(req.body.emailAddress);
-            content = new helper.Content("text/plain", JSON.stringify(req.body.message));
-            mail = new helper.Mail(from_email, subject, to_email, content);
 
-            var sg = require('sendgrid')(process.env.SENDGRID_API_KEY);
-            var request = sg.emptyRequest({
-            method: 'POST',
-            path: '/v3/mail/send',
-            body: mail.toJSON()
-            });
-
-            sg.API(request, function(error, response) {
-            console.log(response.statusCode);
-            console.log(response.body);
-            console.log(response.headers);
-            });
 	msg.push(req.body);
-	//writeMsg(JSON.stringify(msg));
+	writeMsg('static/contacts.json', JSON.stringify(msg));
+    let transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: 'maildev43@gmail.com',
+            pass: 'matilde95'
+        }
+    });
+
+    // setup email data with unicode symbols
+    let mailOptions = {
+        from: '"Webmaster farmacia di Corticella" <maildev43@gmail.com>', // sender address
+        to: 'claudio.tubertini@gmail.com', // list of receivers
+        subject: JSON.stringify(req.body.subject) +' from ' + JSON.stringify(req.body.emailAddress),
+        text:  JSON.stringify(req.body.message)
+    };
+
+    // send mail with defined transport object
+    transporter.sendMail(mailOptions, (error, info) => {
+        if (error) {
+            return console.log(error);
+        }
+        console.log('Message %s sent: %s', info.messageId, info.response);
+    });
 	res.send(200, msgId);
-	next();
+
+	return next();
 };
 
+function testmail(req, res){
+    let transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: 'maildev43@gmail.com',
+            pass: 'matilde95'
+        }
+    });
+
+    // setup email data with unicode symbols
+    let mailOptions = {
+        from: '"Webmaster farmacia di Corticella" <maildev43@gmail.com>', // sender address
+        to: 'claudio.tubertini@gmail.com', // list of receivers
+        subject: JSON.stringify(req.body.subject) +' from ' + JSON.stringify(req.body.emailAddress),
+        text:  JSON.stringify(req.body.message)
+    };
+
+    // send mail with defined transport object
+    transporter.sendMail(mailOptions, (error, info) => {
+        if (error) {
+            return console.log(error);
+        }
+        console.log('Message %s sent: %s', info.messageId, info.response);
+    });
+    return next();
+};
 function writeMsg(file, string ){
     jsonstring = JSON.stringify(string);
 	fs.writeFile(file, jsonstring, function(err) {
@@ -198,8 +213,8 @@ function writeMsg(file, string ){
 
 	    console.log("The file was saved!");
 	});
-}
-writeMsg("static/turni.json", shifts)
+};
+writeMsg("static/turni.json", shifts);
 
 // $.ajax({
 //     url: 'http://www.agi.it/salute/rss',
@@ -271,9 +286,22 @@ writeMsg("static/turni.json", shifts)
 
 var server = restify.createServer();
 server.use(restify.bodyParser({ mapParams: true }));
+//restify.CORS.ALLOW_HEADERS.push('authorization');
+server.use(restify.CORS({
+    origins: ['http://207.154.202.235', 'http://localhost:8081'],
+    credentials: true,
+    headers: ['x-foo']
+     }));
 server.use(restify.jsonp());
-server.use(restify.CORS());
-server.get(ROOT, restify.serveStatic({
+
+// server.use(
+//   function crossOrigin(req,res,next){
+//     res.header("Access-Control-Allow-Origin", "*");
+//     res.header("Access-Control-Allow-Headers", "X-Requested-With");
+//     return next();
+//   }
+// );
+server.get(/\/((?!static).)*\/?/, restify.serveStatic({
   directory: './static',
   default: 'index.html'
 }));
